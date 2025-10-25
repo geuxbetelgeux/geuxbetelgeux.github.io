@@ -25,6 +25,37 @@
         margin-bottom: 0.5rem;
         text-shadow: 2 6px 18px rgba(17, 22, 68, 0.6);
       }
+
+      /* Tarjeta de pregunta con la misma fuente y fondo lila semitransparente */
+      .question-card {
+        background: rgba(166,125,230,0.85); /* lila semitransparente */
+        color: #fff;
+        font-family: 'ElColgado', serif;
+        border: none;
+        box-shadow: 0 8px 30px rgba(90,50,140,0.35);
+      }
+      .question-card .card-body { padding: 1rem 1.25rem; }
+      .question-card .card-text {
+        color: #fff;
+        margin-bottom: 0.75rem;
+        font-size: 1.15rem;
+        line-height: 1.2;
+      }
+      .question-card .form-control {
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.14);
+        resize: vertical;
+      }
+      .question-card .form-control::placeholder { color: rgba(255,255,255,0.85); }
+      .question-card .btn-primary {
+        background: #5e3fb8;
+        border-color: #5e3fb8;
+        box-shadow: none;
+      }
+
+      /* asegurar que controles estén encima del canvas */
+      #questions, #startPrompt { position: relative; z-index: 3; }
     </style>
   </head>
   <body>
@@ -123,13 +154,12 @@
           })();
         }
 
-        function createQuestionForm(text) {
+          function createQuestionForm(text) {
           const wrapper = document.createElement('div');
-          wrapper.className = 'card text-dark mb-3';
-          wrapper.style.background = 'rgba(255,255,255,0.95)';
+          wrapper.className = 'card question-card mb-3';
           wrapper.innerHTML = `
             <div class="card-body">
-              <p class="card-text" style="font-weight:600;margin-bottom:0.5rem;">${text}</p>
+              <p class="card-text">${text}</p>
               <form class="question-form">
                 <textarea class="form-control mb-2" rows="3" required placeholder="Escribe tu respuesta..."></textarea>
                 <div class="d-flex justify-content-end gap-2">
@@ -146,26 +176,22 @@
             e.preventDefault();
             const answer = textarea.value.trim();
             if (!answer) return;
-            // guardar respuesta (localStorage / enviar a servidor)
+            // enviar respuesta
             saveAnswer({ question: text, answer, ts: Date.now() });
 
-            // bloquear inputs
-            textarea.setAttribute('readonly', 'true');
-            btn.disabled = true;
-            btn.textContent = 'Enviado';
+            // quitar la pregunta actual inmediatamente
+            wrapper.remove();
 
-            // añadir siguiente pregunta
-            setTimeout(() => {
-              appendRandomQuestion();
-              // opcional: scroll al nuevo elemento
-              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }, 300);
+            // añadir la siguiente pregunta (reemplaza el contenido)
+            appendRandomQuestion();
           });
 
           return wrapper;
         }
 
-        function appendRandomQuestion() {
+          function appendRandomQuestion() {
+          // limpiar contenedor para que no queden preguntas previas
+          QUESTIONS_EL.innerHTML = '';
           const q = getRandomQuestion();
           const node = createQuestionForm(q);
           QUESTIONS_EL.appendChild(node);
@@ -292,3 +318,5 @@
     </script>
   </body>
 </html>
+
+
