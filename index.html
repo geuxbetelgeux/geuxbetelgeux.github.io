@@ -6,7 +6,7 @@
     <title>Oraculo de Elfos</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <style>
-        @font-face {
+       @font-face {
         font-family: 'ElColgado';
         src:   url('/PirataOne-Regular.ttf') format('truetype');
         font-weight: 400 700;
@@ -56,6 +56,46 @@
 
       /* asegurar que controles estén encima del canvas */
       #questions, #startPrompt { position: relative; z-index: 3; }
+
+      /* sufijo que seguirá al cursor y prefijo fijo al inicio */
+      .question-wrapper { position: relative; }
+      .question-wrapper textarea {
+        padding-right: 3.5rem; /* espacio para sufijo */
+        padding-left: 2.2rem;  /* espacio para prefijo "¿" */
+        position: relative;
+        z-index: 1;
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .question-suffix {
+        position: absolute;
+        pointer-events: none;
+        color: rgba(255,255,255,0.95);
+        font-family: 'ElColgado', serif;
+        font-size: 1.15rem;
+        line-height: 1;
+        user-select: none;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        z-index: 20;
+        transition: opacity .08s ease;
+      }
+      .question-suffix.hidden { opacity: 0; }
+
+      .question-prefix {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        color: rgba(255,255,255,0.95);
+        font-family: 'ElColgado', serif;
+        font-size: 1.15rem;
+        user-select: none;
+        z-index: 20;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      }
     </style>
   </head>
   <body>
@@ -153,15 +193,18 @@
             }
           })();
         }
-
-          function createQuestionForm(text) {
+            function createQuestionForm(text) {
           const wrapper = document.createElement('div');
           wrapper.className = 'card question-card mb-3';
           wrapper.innerHTML = `
             <div class="card-body">
               <p class="card-text">${text}</p>
               <form class="question-form">
-                <textarea class="form-control mb-2" rows="3" required placeholder="Escribe tu respuesta..."></textarea>
+                <div class="question-wrapper" style="position:relative;">
+                  <span class="question-prefix">¿</span>
+                  <textarea class="form-control mb-2" rows="3" required placeholder="Escribe tu respuesta..."></textarea>
+                  <span class="question-suffix hidden">?</span>
+                </div>
                 <div class="d-flex justify-content-end gap-2">
                   <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
                 </div>
@@ -170,24 +213,114 @@
           `;
           const form = wrapper.querySelector('.question-form');
           const textarea = form.querySelector('textarea');
+          const suffix = wrapper.querySelector('.question-suffix');
           const btn = form.querySelector('button');
+
+          // util: escapar HTML para el mirror
+          function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'\n'); }
+
+          // getCaretCoords (deja la implementación que ya tienes, debe seguir funcionando)
+          function getCaretCoords(ta, position) {
+            const style = getComputedStyle(ta);
+            const taRect = ta.getBoundingClientRect();
+
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.visibility = 'hidden';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordWrap = 'break-word';
+            div.style.boxSizing = style.boxSizing;
+            div.style.width = (ta.clientWidth) + 'px';
+
+            div.style.paddingTop = style.paddingTop;
+            div.style.paddingRight = style.paddingRight;
+            div.style.paddingBottom = style.paddingBottom;
+            div.style.paddingLeft = style.paddingLeft;
+            div.style.borderTopWidth = style.borderTopWidth;
+            div.style.borderRightWidth = style.borderRightWidth;
+            div.style.borderBottomWidth = style.borderBottomWidth;
+            div.style.borderLeftWidth = style.borderLeftWidth;
+
+            div.style.fontFamily = style.fontFamily;
+            div.style.fontSize = style.fontSize;
+            div.style.fontWeight = style.fontWeight;
+            div.style.lineHeight = style.lineHeight;
+            div.style.letterSpacing = style.letterSpacing;
+            div.style.textTransform = style.textTransform;
+            div.style.wordBreak = 'break-word';
+
+            div.style.left = (taRect.left + window.scrollX) + 'px';
+            div.style.top = (taRect.top + window.scrollY) + 'px';
+
+            function escHtmlLocal(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+            const text = ta.value.substring(0, position);
+            const html = escHtmlLocal(text).replace(/ {2}/g, ' &nbsp;').replace(/\n/g, '<br/>');
+            div.innerHTML = html;
+
+            const span = document.createElement('span');
+            span.textContent = '\u200b';
+            div.appendChild(span);
+
+            document.body.appendChild(div);
+
+            div.scrollTop = ta.scrollTop;
+            div.scrollLeft = ta.scrollLeft;
+
+            const spanOffsetTop = span.offsetTop;
+            const spanOffsetLeft = span.offsetLeft;
+
+            document.body.removeChild(div);
+
+            const left = spanOffsetLeft - ta.scrollLeft;
+            const top = spanOffsetTop - ta.scrollTop;
+
+            return { top, left, taRect };
+          }
+
+          function updateSuffixPosition() {
+            if (document.activeElement !== textarea) {
+              suffix.classList.add('hidden');
+              return;
+            }
+            const pos = textarea.selectionStart;
+            const coords = getCaretCoords(textarea, pos);
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const taRect = coords.taRect;
+            const left = taRect.left - wrapperRect.left + coords.left + 2;
+            const top = taRect.top - wrapperRect.top + coords.top - 2;
+            suffix.style.left = `${left}px`;
+            suffix.style.top = `${top}px`;
+            suffix.classList.remove('hidden');
+          }
+
+          // eventos que actualizan posición
+          textarea.addEventListener('input', updateSuffixPosition);
+          textarea.addEventListener('keydown', () => setTimeout(updateSuffixPosition, 0));
+          textarea.addEventListener('click', updateSuffixPosition);
+          textarea.addEventListener('keyup', updateSuffixPosition);
+          textarea.addEventListener('scroll', updateSuffixPosition);
+          textarea.addEventListener('focus', updateSuffixPosition);
+          textarea.addEventListener('blur', () => suffix.classList.add('hidden'));
+          setTimeout(updateSuffixPosition, 0);
 
           form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const answer = textarea.value.trim();
+            let answer = textarea.value.trim();
             if (!answer) return;
-            // enviar respuesta
+
+            // eliminar visuales de apertura/cierre antes de guardar
+            answer = answer.replace(/^¿+/u, '').replace(/\?+$/u, '').trim();
+            if (!answer) return;
+
             saveAnswer({ question: text, answer, ts: Date.now() });
 
-            // quitar la pregunta actual inmediatamente
             wrapper.remove();
-
-            // añadir la siguiente pregunta (reemplaza el contenido)
             appendRandomQuestion();
           });
 
           return wrapper;
         }
+         
 
           function appendRandomQuestion() {
           // limpiar contenedor para que no queden preguntas previas
@@ -318,6 +451,3 @@
     </script>
   </body>
 </html>
-
-
-
